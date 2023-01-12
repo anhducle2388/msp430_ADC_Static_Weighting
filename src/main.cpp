@@ -3,24 +3,26 @@
 /////////////////////////////////////////
 /* PRE-DEFINED FUNCTIONS AND VARIABLE S*/
 #define BAUDRATE  115200 // Hz
-#define TSERIAL   500    // ms
+#define TSERIAL   1000   // ms
 #define TSAMPLING 100    // ms: Max 65000*2 ms -> If need longer sampling time, need to config Timer Register at configureRoutineInteruptT()
+#define CALIB_POINT_1     0 //g
+#define CALIB_POINT_2   100 //g
 
 void configureGpio(void);
 void configureClk(void);
 void configureRoutineInteruptT(void);
 void configureAdcLoadcell(void);
 void configureHx711(void);
+void      measAdc12(void);
+uint32_t  measAdcHx711(void);
+float getValHx711(uint32_t adcVal, float fSlope, float fOffset);
+float getValAdc12(uint16_t adcVal, float fSlope, float fOffset);
+void calibLoadcell(void);
 
-void measAdcLoadcell(void);
-uint32_t measAdcHx711(void);
-
-float getValHx711(uint32_t adcVal, uint16_t scale);
-float getValLoadcell(uint16_t adcVal, uint16_t scale);
-
-volatile uint16_t curCnt = 0;
+volatile uint32_t curCnt = 0;
 volatile uint32_t valDLoadcell = 0;
 volatile float    valFLoadcell = 0.0f;
+volatile float slope = 0, offset = 0;
 
 //////////////////////////////////
 /* SETUP HARDWARE CONFIGURATION */
@@ -28,8 +30,9 @@ void setup() {
   
   // Init Serial Port with Baudrate
   Serial.begin(BAUDRATE);
-  Serial.println("");
+  Serial.println(" ");
   Serial.println(">>> Initializing");
+  Serial.println(" ");
   delay(1000);
 
   // Config Function
@@ -38,12 +41,17 @@ void setup() {
   configureHx711();
   configureRoutineInteruptT();
   
-  // Finish Setup Configuration
-  Serial.println(">>> Start Program");
-  delay(1000);
-
   // Global interupt Enable + Low Power Mode 0
   _BIS_SR(GIE);
+
+  // Loadcell calibration
+  calibLoadcell();
+
+  // Finish Setup Configuration
+  Serial.println(" ");
+  Serial.println(">>> Start Program");
+  Serial.println(" ");
+
 }
 
 void configureGpio(void) {
@@ -96,7 +104,7 @@ void configureHx711(void) {
   P4OUT |= BIT2;    /*Config Pull-Up for DI Mode*/
 }
 
-void measAdcLoadcell(void) { 
+void measAdc12(void) { 
   ADC12CTL0 |= ADC12ENC | ADC12SC;  // Enable and start ADC conversion
 }
 
@@ -123,15 +131,42 @@ uint32_t measAdcHx711(void) {
   return adcVal;
 }
 
-float getValLoadcell(uint16_t adcVal, uint16_t scale = 1000) {
-  return (float) adcVal / 4095 * scale;
+float getValAdc12(uint16_t adcVal, float fSlope, float fOffset) {
+  return (float) adcVal * fSlope + fOffset;
 }
 
-float getValHx711(uint32_t adcVal, uint16_t scale = 1000) {
-  return (float) adcVal / 16777215 * scale;
+float getValHx711(uint32_t adcVal, float fSlope, float fOffset) {
+  return (float) adcVal * fSlope + fOffset;
 }
 
+void calibLoadcell(void) {
+  uint32_t adcVal1, adcVal2;
 
+  // Calib at   0g
+  Serial.print("  <> Loadcell calib at   0g. ");
+  for (int i = 5; i > 0; i--) {
+    Serial.print(i);
+    delay(1000);
+    adcVal1 = valDLoadcell;
+  }
+  Serial.println("");
+
+  // Calib at 100g
+  Serial.print("  <> Loadcell calib at 100g. ");
+  for (int i = 5; i > 0; i--) {
+    Serial.print(i);
+    delay(1000);
+    adcVal2 = valDLoadcell;
+  }
+  Serial.println("");
+
+  // Calibrating
+  slope  = (float) (CALIB_POINT_2 - CALIB_POINT_1) / (adcVal2 - adcVal1);
+  offset = (float) (CALIB_POINT_1 - slope * adcVal1);
+
+  Serial.println("  <> Calibration done.");
+  delay(1000);
+}
 ////////////////////////////////////
 /* MAIN PROGRAM BLOCK - MAIN LOOP */
 void loop() {
@@ -148,7 +183,7 @@ void loop() {
 __interrupt void toggleRedLed(void) {
   P1IFG &= ~BIT1;   
 
-  // Turn off = 1 at P1.0 RED LED
+  // Toggle off = 1 at P1.0 RED LED
   P1OUT ^= BIT0;
 }
 
@@ -169,5 +204,5 @@ __interrupt void timerRoutine(void) {
 
   // Main Routine Program
   valDLoadcell = measAdcHx711();
-  valFLoadcell = getValHx711(valDLoadcell, 100);
+  valFLoadcell = getValHx711(valDLoadcell, slope, offset);
 }

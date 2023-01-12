@@ -5,6 +5,7 @@ Project code for embedded board MSP430F5529LP to measure loadcell weighting and 
 - Install VS Code with PlatformIO.
 - Install MSP430 FET driver to load fw through USB cable.
 - Launchkit Pack MSP430F5529LP
+- HX711 ADC 12bit Converter Board
 
 ## 2. Library
 - <Arduino.h>  Energia/ Arduino Framework for Serial Comm.
@@ -18,3 +19,6 @@ Project code for embedded board MSP430F5529LP to measure loadcell weighting and 
   * Vref- = GND.
   * Vsense+ = P6.6
   * Vsense- = GND
+- Loadcell ADC readback via HX711 24bit ADC Convert Board
+  * DATA = P4.2 /DI
+  * SCLK = P4.1 /DO
