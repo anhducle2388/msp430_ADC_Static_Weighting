@@ -3,11 +3,11 @@
 /////////////////////////////////////////
 /* PRE-DEFINED FUNCTIONS AND VARIABLE S*/
 #define BAUDRATE  115200 // Hz
-#define TSERIAL   1000   // ms
+#define TSERIAL   100    // ms
 #define TSAMPLING 100    // ms: Max 65000*2 ms -> If need longer sampling time, need to config Timer Register at configureRoutineInteruptT()
 #define CALIB_POINT_1     0 //g
 #define CALIB_POINT_2   100 //g
-
+#define CALIB_POINTS      5
 void configureGpio(void);
 void configureClk(void);
 void configureRoutineInteruptT(void);
@@ -21,8 +21,8 @@ void calibLoadcell(void);
 
 volatile uint32_t curCnt = 0;
 volatile uint32_t valDLoadcell = 0;
-volatile float    valFLoadcell = 0.0f;
-volatile float slope = 0, offset = 0;
+volatile double    valFLoadcell = 0.0f;
+volatile double slope = 0, offset = 0;
 
 //////////////////////////////////
 /* SETUP HARDWARE CONFIGURATION */
@@ -43,13 +43,14 @@ void setup() {
   
   // Global interupt Enable + Low Power Mode 0
   _BIS_SR(GIE);
+  sleep(1000);
 
   // Loadcell calibration
   calibLoadcell();
 
   // Finish Setup Configuration
   Serial.println(" ");
-  Serial.println(">>> Start Program");
+  Serial.println(">>> Start Program"); 
   Serial.println(" ");
 
 }
@@ -140,31 +141,62 @@ float getValHx711(uint32_t adcVal, float fSlope, float fOffset) {
 }
 
 void calibLoadcell(void) {
-  uint32_t adcVal1, adcVal2;
+  uint32_t adcVal1[CALIB_POINTS], adcVal2[CALIB_POINTS];
+  double   val1 = 0, val2 = 0;
 
   // Calib at   0g
-  Serial.print("  <> Loadcell calib at   0g. ");
-  for (int i = 5; i > 0; i--) {
-    Serial.print(i);
-    delay(1000);
-    adcVal1 = valDLoadcell;
+  Serial.println("  <> Loadcell calib at   0g. Remove Golden Weight from Loadcell.");
+  sleep(5000);
+  for (int i = CALIB_POINTS-1; i >= 0; i--) {
+    
+    Serial.print("       (");
+    Serial.print(i+1);
+    Serial.print(") ");
+    Serial.println(valDLoadcell);
+
+    adcVal1[i] = valDLoadcell;
+
+    delay(1000);    
   }
-  Serial.println("");
+
+  for (int i = CALIB_POINTS-1; i >= 0; i--) {
+    val1 += adcVal1[i];
+  }
+  val1 = val1 / CALIB_POINTS;
+
+  Serial.println(val1);
 
   // Calib at 100g
-  Serial.print("  <> Loadcell calib at 100g. ");
-  for (int i = 5; i > 0; i--) {
-    Serial.print(i);
+  Serial.println("  <> Loadcell calib at 100g. Put Golden Weight to Loadcell.");
+  sleep(5000);
+  for (int i = CALIB_POINTS-1; i >= 0; i--) {
+    
+    Serial.print("       (");
+    Serial.print(i+1);
+    Serial.print(") ");
+    Serial.println(valDLoadcell);
+
+    adcVal2[i] = valDLoadcell;
+
     delay(1000);
-    adcVal2 = valDLoadcell;
   }
-  Serial.println("");
+
+  for (int i = CALIB_POINTS-1; i >= 0; i--) {
+    val2 += adcVal2[i];
+  }
+  val2 = val2 / CALIB_POINTS;
+
+  Serial.println(val2);
 
   // Calibrating
-  slope  = (float) (CALIB_POINT_2 - CALIB_POINT_1) / (adcVal2 - adcVal1);
-  offset = (float) (CALIB_POINT_1 - slope * adcVal1);
+  slope  = (double) (CALIB_POINT_2 - CALIB_POINT_1) / (val2 - val1);
+  offset = (double) (CALIB_POINT_1 - slope * val1);
 
-  Serial.println("  <> Calibration done.");
+  Serial.print("  <> Calibration done. Slope = ");
+  Serial.print(slope);
+  Serial.print(" Offset = ");
+  Serial.println(offset);
+
   delay(1000);
 }
 ////////////////////////////////////
@@ -172,6 +204,8 @@ void calibLoadcell(void) {
 void loop() {
 
   /*Sending debug log every seconds*/
+  Serial.print(valDLoadcell);
+  Serial.print(" --- ");
   Serial.println(valFLoadcell);
   delay(TSERIAL);
 
