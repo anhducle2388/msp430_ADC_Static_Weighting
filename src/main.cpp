@@ -145,8 +145,13 @@ void calibLoadcell(void) {
   double   val1 = 0, val2 = 0;
 
   // Calib at   0g
-  Serial.println("  <> Loadcell calib at   0g. Remove Golden Weight from Loadcell.");
-  sleep(5000);
+  Serial.println("  <> Loadcell calib at   0g. Remove Golden Weight within Loadcell in 5s.");
+  Serial.print("  <> ");
+  for (int i = CALIB_POINTS-1; i >= 0; i--) {
+    Serial.print(i+1); Serial.print("  "); sleep(1000);
+  };
+  Serial.println("");
+
   for (int i = CALIB_POINTS-1; i >= 0; i--) {
     
     Serial.print("       (");
@@ -167,8 +172,13 @@ void calibLoadcell(void) {
   Serial.println(val1);
 
   // Calib at 100g
-  Serial.println("  <> Loadcell calib at 100g. Put Golden Weight to Loadcell.");
-  sleep(5000);
+  Serial.println("  <> Loadcell calib at 100g. Put Golden Weight to Loadcell within Loadcell in 5s.");
+  Serial.print("  <> ");
+  for (int i = CALIB_POINTS-1; i >= 0; i--) {
+    Serial.print(i+1); Serial.print("  "); sleep(1000);
+  };
+  Serial.println("");
+
   for (int i = CALIB_POINTS-1; i >= 0; i--) {
     
     Serial.print("       (");
@@ -205,7 +215,7 @@ void loop() {
 
   /*Sending debug log every seconds*/
   Serial.print(valDLoadcell);
-  Serial.print(" --- ");
+  Serial.print("  ");
   Serial.println(valFLoadcell);
   delay(TSERIAL);
 
