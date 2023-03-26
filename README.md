@@ -14,11 +14,9 @@ Project code for embedded board MSP430F5529LP to measure loadcell weighting and 
 ## 3. Pinout Config
 - P4.7 GREEN LED for blinking.
 - P1.0 RED LED toggled by button at P1.1.
-- ADC12 at P6.6:
-  * Vref+ = 5V.
-  * Vref- = GND.
-  * Vsense+ = P6.6
-  * Vsense- = GND
 - Loadcell ADC readback via HX711 24bit ADC Convert Board
   * DATA = P4.2 /DI
   * SCLK = P4.1 /DO
+- Loadcell ADC readback via HX711 24bit ADC Convert Board
+  * DATA = P6.2 /DI
+  * SCLK = P6.1 /DO
