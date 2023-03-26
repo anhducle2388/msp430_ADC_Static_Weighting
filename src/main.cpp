@@ -5,24 +5,31 @@
 #define BAUDRATE  115200 // Hz
 #define TSERIAL   50    // ms
 #define TSAMPLING 100    // ms: Max 65000*2 ms -> If need longer sampling time, need to config Timer Register at configureRoutineInteruptT()
-#define CALIB_POINT_1     0 //g
-#define CALIB_POINT_2   200 //g
+#define CALIB_POINT_1        0 //mg
+#define CALIB_POINT_2   150000 //mg
 #define CALIB_POINTS      5
+
+typedef struct {
+  double slope;
+  double offset;
+  uint32_t valDec;
+  double   valDbl;
+} calLoadcell;
 
 void configureGpio(void);
 void configureClk(void);
 void configureRoutineInteruptT(void);
 void configureHx711(void);
-void      measAdc12(void);
-uint32_t  measAdcHx711(void);
-float getValHx711(uint32_t adcVal, float fSlope, float fOffset);
-float getValAdc12(uint16_t adcVal, float fSlope, float fOffset);
-void calibLoadcell(void);
+
+void      calibLoadcell(calLoadcell *tmpLoadcell);
+uint32_t  measAdcHx711_1(calLoadcell *tmpLoadcell);
+uint32_t  measAdcHx711_2(calLoadcell *tmpLoadcell);
+double    getValHx711(calLoadcell *tmpLoadcell);
 
 volatile uint32_t curCnt = 0;
-volatile uint32_t valDLoadcell = 0;
-volatile double    valFLoadcell = 0.0f;
-volatile double slope = 0, offset = 0;
+
+calLoadcell itemLoadcell_1;
+calLoadcell itemLoadcell_2;
 
 //////////////////////////////////
 /* SETUP HARDWARE CONFIGURATION */
@@ -45,7 +52,13 @@ void setup() {
   sleep(1000);
 
   // Loadcell calibration
-  calibLoadcell();
+  Serial.println(">>> LOADCELL 1");
+  Serial.println("");
+  calibLoadcell(&itemLoadcell_1);
+
+  Serial.println(">>> LOADCELL 2");
+  Serial.println("");
+  calibLoadcell(&itemLoadcell_2);
 
   // Finish Setup Configuration
   Serial.println(" ");
@@ -103,12 +116,11 @@ void configureHx711(void) {
   P6OUT |= BIT2;    /*Config Pull-Up for DI Mode*/  
 }
 
-uint32_t measAdcHx711(void) {
-  uint8_t  cntAdc = 0;
-  uint32_t tmpAdcVal = 0, adcVal = 0;
-
-  // Retrieve 24b DATA from Hx711 
+uint32_t measAdcHx711_1(calLoadcell * tmpLoadcell) {
   // Hx711 - 1st Loadcell
+  uint8_t  cntAdc = 0;
+  uint32_t tmpAdcVal = 0;
+
   do {
     // CLK trigger
     P4OUT |= BIT1;
@@ -123,10 +135,17 @@ uint32_t measAdcHx711(void) {
   P4OUT |= BIT1;
   tmpAdcVal = tmpAdcVal ^ 0x800000;
   P4OUT &= ~BIT1;
+  
+  tmpLoadcell->valDec = tmpAdcVal;
 
-  adcVal = tmpAdcVal;
+  return tmpAdcVal;
+}
 
+uint32_t measAdcHx711_2(calLoadcell * tmpLoadcell) {
   // Hx711 - 2nd Loadcell
+  uint8_t  cntAdc = 0;
+  uint32_t tmpAdcVal = 0;
+
   do {
     // CLK trigger
     P6OUT |= BIT1;
@@ -142,19 +161,16 @@ uint32_t measAdcHx711(void) {
   tmpAdcVal = tmpAdcVal ^ 0x800000;
   P6OUT &= ~BIT1;
 
-  adcVal = adcVal + tmpAdcVal;
-  return adcVal;
+  tmpLoadcell->valDec = tmpAdcVal;
+  return tmpAdcVal;
 }
 
-float getValAdc12(uint16_t adcVal, float fSlope, float fOffset) {
-  return (float) adcVal * fSlope + fOffset;
+double getValHx711(calLoadcell * tmpLoadcell) {
+  tmpLoadcell->valDbl = (double) tmpLoadcell->valDec * tmpLoadcell->slope + tmpLoadcell->offset;
+  return (double) tmpLoadcell->valDbl;
 }
 
-float getValHx711(uint32_t adcVal, float fSlope, float fOffset) {
-  return (float) adcVal * fSlope + fOffset;
-}
-
-void calibLoadcell(void) {
+void calibLoadcell(calLoadcell * tmpLoadcell) {
   uint32_t adcVal1[CALIB_POINTS], adcVal2[CALIB_POINTS];
   double   val1 = 0, val2 = 0;
 
@@ -171,9 +187,9 @@ void calibLoadcell(void) {
     Serial.print("       (");
     Serial.print(i+1);
     Serial.print(") ");
-    Serial.println(valDLoadcell);
+    Serial.println(tmpLoadcell->valDec);
 
-    adcVal1[i] = valDLoadcell;
+    adcVal1[i] = tmpLoadcell->valDec;
 
     delay(1000);    
   }
@@ -198,9 +214,9 @@ void calibLoadcell(void) {
     Serial.print("       (");
     Serial.print(i+1);
     Serial.print(") ");
-    Serial.println(valDLoadcell);
+    Serial.println(tmpLoadcell->valDec);
 
-    adcVal2[i] = valDLoadcell;
+    adcVal2[i] = tmpLoadcell->valDec;
 
     delay(1000);
   }
@@ -210,16 +226,14 @@ void calibLoadcell(void) {
   }
   val2 = val2 / CALIB_POINTS;
 
-  Serial.println(val2);
-
   // Calibrating
-  slope  = (double) (CALIB_POINT_2 - CALIB_POINT_1) / (val2 - val1);
-  offset = (double) (CALIB_POINT_1 - slope * val1);
+  tmpLoadcell->slope  = (double) (CALIB_POINT_2 - CALIB_POINT_1) / (val2 - val1);
+  tmpLoadcell->offset = (double) (CALIB_POINT_1 - tmpLoadcell->slope * val1);
 
   Serial.print("  <> Calibration done. Slope = ");
-  Serial.print(slope);
+  Serial.print(tmpLoadcell->slope);
   Serial.print(" Offset = ");
-  Serial.println(offset);
+  Serial.println(tmpLoadcell->offset);
 
   delay(1000);
 }
@@ -228,9 +242,12 @@ void calibLoadcell(void) {
 void loop() {
 
   /*Sending debug log every seconds*/
-  Serial.print(valDLoadcell);
-  Serial.print("  ");
-  Serial.println(valFLoadcell);
+  Serial.print(itemLoadcell_1.valDbl);
+  Serial.print(" , ");
+  Serial.print(itemLoadcell_2.valDbl);
+  Serial.print(" , ");
+  Serial.print(itemLoadcell_1.valDbl + itemLoadcell_2.valDbl);
+  Serial.println("");
   delay(TSERIAL);
 
 }
@@ -253,6 +270,8 @@ __interrupt void timerRoutine(void) {
   P4OUT ^= BIT7; curCnt++;
 
   // Main Routine Program
-  valDLoadcell = measAdcHx711();
-  valFLoadcell = getValHx711(valDLoadcell, slope, offset);
+  measAdcHx711_1(&itemLoadcell_1);
+  getValHx711(&itemLoadcell_1);
+  measAdcHx711_2(&itemLoadcell_2);
+  getValHx711(&itemLoadcell_2);
 }
